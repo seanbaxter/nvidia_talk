@@ -1,8 +1,17 @@
 #include <cstdio>
-#include <cuda_runtime_api.h>
 
-template<int x, int... y>
-constexpr int upper_bound = x < y ...?? int... : sizeof...y;
+template<auto x, typename type_t>
+constexpr bool is_value_in_enum = (... || (@enum_values(type_t) == (type_t)x));
+
+// Set of device architectures.
+typedef unsigned long long base_int_t;
+enum class sm_selector : base_int_t {
+  sm_35 = 35, sm_37 = 37,
+  sm_50 = 50, sm_52 = 52, sm_53 = 53,
+  sm_60 = 60, sm_61 = 61, sm_62 = 62,
+  sm_70 = 70, sm_72 = 72, sm_75 = 75,
+  sm_80 = 80, sm_86 = 86,
+};
 
 // tuning params
 using nt  [[attribute   ]] = int;
@@ -13,7 +22,8 @@ using occ [[attribute(0)]] = int;
 using strided    [[attribute]] = void;
 using persistent [[attribute]] = void;
 
-enum my_tuning_t {
+// Tunings for a specific operation.
+enum class tuning_t {
   kepler  [[ .nt=128, .vt=5               ]] = 35,
   maxwell [[ .nt=256, .vt=7,  .persistent ]] = 52,
   pascal  [[ .nt=64,  .vt=11, .strided    ]] = 61,
@@ -21,46 +31,22 @@ enum my_tuning_t {
   ampere  [[ .nt=256, .vt=19, .strided    ]] = 86,
 };
 
-template<typename tuning_t>
-__global__ void kernel() {
-  // Find the best tunings for this target's PTX version.
+// Test that each tuning corresponds to an actual device architecture.
+static_assert(
+  is_value_in_enum<@enum_values(tuning_t), sm_selector>,
+  @string(@enum_names(tuning_t), " (", (int)@enum_values(tuning_t), ") is invalid")
+)...;
 
-  // Loop over all architectures specified at the compiler command line.
-  @meta for enum(nvvm_arch_t arch : nvvm_arch_t) {
-
-    // Enter the architecture being lowered to PTX.
-    if target(arch == __nvvm_arch) {
-      
-      // Search for the best tuning for this architecture.
-      constexpr int index = upper_bound<arch, @enum_values(tuning_t)...>;
-
-      // There must be a viable tuning.
-      static_assert(index, @string("No viable tuning for ", @enum_name(arch)));
-
-      // Pluck out the best one.
-      constexpr tuning_t tuning = @enum_value(tuning_t, index - 1);
-
-      // Report what we've chosen.
-      @meta printf("Selecting tuning \"%s\" for arch %s\n", @enum_name(tuning),
-        @enum_name(arch));
-
-      // Set the __launch_bounds__.
-      __nvvm_maxntidx(@enum_attribute(tuning, nt));
-      __nvvm_minctasm(@enum_attribute(tuning, occ));
-
-      // Call the user function.
-      printf("tuning = %s, arch = sm_%d, nt=%d, vt=%d, occ=%d\n", 
-        @enum_name(tuning), 
-        (int)tuning,
-        @enum_attribute(tuning, nt), 
-        @enum_attribute(tuning, vt),
-        @enum_attribute(tuning, occ)
-      );
-    }
+int main() { 
+  // Print the tunings using a loop.
+  printf("With a loop:\n");
+  @meta for enum(tuning_t tuning : tuning_t) {
+    printf("%-10s: %3dx%2d\n", @enum_name(tuning),
+      @enum_attribute(tuning, nt), @enum_attribute(tuning, vt));
   }
-}
 
-int main() {
-  kernel<my_tuning_t><<<1, 1>>>();
-  cudaDeviceSynchronize();
+  // Print the tunings using pack expansion.
+  printf("\nWith a pack expansion:\n");
+  printf("%-10s: %3dx%2d\n", @enum_names(tuning_t), 
+    @enum_attributes(tuning_t, nt), @enum_attributes(tuning_t, vt)) ...;
 }
