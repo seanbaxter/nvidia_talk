@@ -35,13 +35,13 @@ __global__ void launch_tuning_k(func_t func) {
     if target(arch == __nvvm_arch) {
       
       // Search for the best tuning for this architecture.
-      constexpr int index = upper_bound<arch, @enum_values(tuning_t)...>;
+      constexpr int ub = upper_bound<arch, @enum_values(tuning_t)...>;
 
       // There must be a viable tuning.
-      static_assert(index, @string("No viable tuning for ", @enum_name(arch)));
+      static_assert(ub, @string("No viable tuning for ", @enum_name(arch)));
 
       // Pluck out the best one.
-      constexpr tuning_t tuning = @enum_value(tuning_t, index - 1);
+      constexpr tuning_t tuning = @enum_value(tuning_t, ub - 1);
 
       // Report what we've chosen.
       @meta printf("Selecting tuning \"%s\" for arch %s\n", @enum_name(tuning),
@@ -65,11 +65,14 @@ void launch_tuning(const func_t& func, size_t count) {
     is_value_in_enum<@enum_values(tuning_t), sm_selector>,
     @string(@enum_names(tuning_t), " (", (int)@enum_values(tuning_t), ") is invalid")
   )...;
+
+  // Retrieve the kernel's arch version.
   cudaFuncAttributes attr;
   cudaFuncGetAttributes(&attr, (const void*)&launch_tuning_k<tuning_t, func_t>);
 
   printf("Launching with binary = sm_%d\n", attr.binaryVersion);
 
+  // Get the best tuning for this arch.
   int index = attr.binaryVersion < (int)@enum_values(tuning_t) ...?
     int... - 1 : @enum_count(tuning_t) - 1;
 

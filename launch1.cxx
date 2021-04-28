@@ -1,6 +1,6 @@
 #include <cstdio>
 
-__global__ void kernel() {
+__global__ void kernel(int* sm) {
   // Generate a compile-time for loop over the enums inside the kernel.
   @meta for enum(nvvm_arch_t arch : nvvm_arch_t) {
 
@@ -9,6 +9,9 @@ __global__ void kernel() {
 
       // Do something with the compile-time arch.
       @meta printf("arch %s\n", @enum_name(arch));
+
+      // Also write the arch to the output.
+      *sm = (int)arch;
     }
   }
 }

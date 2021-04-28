@@ -49,7 +49,7 @@ __global__ void kernel() {
       __nvvm_minctasm(@enum_attribute(tuning, occ));
 
       // Call the user function.
-      printf("tuning \"%s\"=%d, arch=%d, nt=%d, vt=%d, occ=%d\n", 
+      printf("\"%s\"=%d, arch=%d, nt=%d, vt=%d, occ=%d\n", 
         @enum_name(tuning), 
         (int)tuning,
         (int)arch,
